@@ -1,0 +1,16 @@
+.idea
+# Ignore .next directory
+**/.next
+
+# Ignore node_modules directory
+**/node_modules
+
+# Ignore .env files
+**/.env
+
+**/dist-react
+**/dist-electron
+
+**/dist
+
+**/venv
