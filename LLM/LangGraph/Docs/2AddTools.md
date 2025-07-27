@@ -189,7 +189,7 @@ graph_builder.add_node("tools", tool_node)
 >
 > 나중에 직접 이 코드를 작성하고 싶지 않다면, LangGraph에 내장된 ToolNode를 사용할 수 있습니다.
 
-> 하단 스스로 문답-1 참고
+> 하단 [스스로 문답-1](https://github.com/yesaroun/TIL_V2/blob/main/LLM/LangGraph/Docs/2AddTools.md#%EC%8A%A4%EC%8A%A4%EB%A1%9C-%EB%AC%B8%EB%8B%B5-1) 참고
 ---
 
 ### **6. 조건부 엣지(Conditional Edges) 정의하기**
