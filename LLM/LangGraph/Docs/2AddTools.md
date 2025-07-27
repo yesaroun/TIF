@@ -1,3 +1,6 @@
+
+[url](https://langchain-ai.github.io/langgraph/tutorials/get-started/2-add-tools/)
+
 ### **LangGraph: 도구 추가하기 튜토리얼**
 
 챗봇이 "기억(학습 데이터)"만으로는 대답할 수 없는 질문을 처리하기 위해, 웹 검색 도구를 통합해 보겠습니다. 챗봇은 이 도구를 사용해 관련 정보를 찾고 더 나은 답변을 제공할 수 있게 됩니다.
@@ -186,7 +189,7 @@ graph_builder.add_node("tools", tool_node)
 >
 > 나중에 직접 이 코드를 작성하고 싶지 않다면, LangGraph에 내장된 ToolNode를 사용할 수 있습니다.
 
-> [질문](obsidian://open?vault=Programing&file=LangGraph%2FDocs%2F2.%20%EC%A7%88%EB%AC%B8-1)
+> 하단 스스로 문답-1 참고
 ---
 
 ### **6. 조건부 엣지(Conditional Edges) 정의하기**
@@ -380,3 +383,85 @@ graph = graph_builder.compile()
 ### **다음 단계**
 
 챗봇은 아직 과거의 상호작용을 스스로 기억할 수 없어, 여러 턴에 걸친 일관성 있는 대화를 나누는 데 한계가 있습니다. 다음 파트에서는 이 문제를 해결하기 위해 **메모리(기억력)를 추가**할 것입니다.
+
+---
+
+## 스스로 문답-1
+
+### 1. `tool` 객체는 어떤 형태인가요?
+
+**결론부터 말하면, `tool`은 이름, 설명, 사용법을 스스로 가진 '똑똑한 함수' 객체입니다.**
+
+학생분이 코드에서 `tool = TavilySearch(max_results=2)` 이렇게 만드셨죠? 이 `TavilySearch` 객체가 바로 `tool`입니다. LangChain에서 도구(Tool)로 사용되는 객체들은 보통 정해진 규칙을 따릅니다.
+
+이 객체 안에는 여러 정보가 들어있는데, 그중 가장 중요한 것은 다음과 같습니다.
+
+- **`.name` (이름)**: 도구의 고유한 이름입니다. (예: `tavily_search_results_json`) LLM이 여러 도구 중에 "이 도구를 써줘!"라고 지목할 때 이 이름을 사용합니다.
+- **`.description` (설명)**: "이 도구는 웹 검색을 할 때 사용해. 최신 정보가 필요할 때 유용해." 와 같이 LLM에게 이 도구를 **언제 사용해야 하는지** 알려주는 설명서입니다.
+- **`.args` 또는 `.args_schema` (사용법)**: "이 도구를 쓰려면 'query'라는 이름으로 검색어를 줘야 해." 와 같이 도구를 사용할 때 **어떤 정보를 줘야 하는지** 알려주는 사용 설명서입니다.
+
+`tool.name`처럼 속성에 바로 접근할 수 있는 이유는 `tool`이 이런 정보들을 속성으로 가지고 있는 **클래스 인스턴스(객체)** 이기 때문입니다.
+
+---
+
+### 2. `BasicToolNode`는 어떻게 사용되고, `message.tool_calls`는 무엇인가요?
+
+이 부분이 LangGraph 에이전트의 핵심 동작 원리입니다!
+
+#### **`BasicToolNode`의 `inputs`는 무엇일까요?**
+
+`BasicToolNode`와 같은 노드가 호출될 때 받는 `inputs`는 바로 **그래프의 현재 상태(`State`)** 입니다. 학생분이 정의한 `State`는 이렇죠.
+
+```python
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
+```
+
+따라서 `inputs`는 실제로는 이런 딕셔너리 형태입니다: `{'messages': [HumanMessage(...), AIMessage(...)]}`
+
+#### **`message.tool_calls`는 어떻게 생겨났을까요?**
+
+이것이 마법의 핵심입니다! ✨
+
+1. 학생분이 `llm_with_tools = llm.bind_tools(tools)` 코드로 LLM에게 **"너는 이제 웹 검색 도구를 쓸 수 있어!"** 라고 알려줬습니다.
+2. `chatbot` 노드에서 사용자가 "LangGraph가 뭐야?"처럼 LLM이 모르는 질문을 하면, LLM은 스스로 판단합니다. "아, 이건 내 지식만으론 부족해. 아까 알려준 웹 검색 도구를 써야겠다!"
+3. 이때 LLM은 일반적인 답변 대신, **도구를 사용하겠다는 특별한 형식의 `AIMessage`** 를 생성합니다. 이 특별한 메시지 안에 바로 **`.tool_calls`** 라는 속성이 들어있습니다.
+
+즉, `.tool_calls`는 **LLM이 "이 도구를 이런 정보로 호출해줘!"라고 우리에게 보내는 요청서**인 셈입니다.
+
+그래서 `message = messages[-1]` 코드로 LLM이 방금 생성한 마지막 메시지를 꺼내보면, 그 안에 `.tool_calls`가 들어있을 수 있는 것이죠.
+
+---
+
+### 3. `tool_call["name"]`과 `tool_call["args"]`는 무엇인가요?
+
+`message.tool_calls`는 LLM이 여러 도구를 한 번에 호출할 수도 있기 때문에 리스트(`[]`) 형태입니다. `for tool_call in message.tool_calls:` 코드는 이 요청서 목록을 하나씩 꺼내보는 과정입니다.
+
+각각의 `tool_call`은 **하나의 도구 호출 요청**이며, 딕셔너리(`{}`) 형태입니다.
+
+- **`tool_call["name"]`**: LLM이 사용하려는 도구의 **이름**입니다. (예: `'tavily_search_results_json'`) 이 이름을 보고 `self.tools_by_name` 딕셔너리에서 실제 `TavilySearch` 객체를 찾아냅니다.
+- **`tool_call["args"]`**: 해당 도구를 사용할 때 필요한 **입력값**입니다. 이것 또한 딕셔너리 형태입니다. (예: `{'query': 'LangGraph가 뭐야?'}`) 이 `args`를 그대로 `tool.invoke()`에 넘겨주면 도구가 실행됩니다.
+
+정리하면, `BasicToolNode`는 LLM이 남긴 요청서(`tool_call`)를 보고, 요청서에 적힌 이름(`name`)의 도구를 찾아, 요청서에 적힌 재료(`args`)를 넣어 실행하는 역할을 합니다.
+
+---
+
+### 4. `ToolMessage` 객체는 무엇인가요?
+
+`ToolMessage`는 **도구를 실행한 결과를 다시 LLM에게 알려주기 위한 보고서**입니다.
+
+LLM이 "웹 검색해줘!"라고 요청해서 우리가 열심히 검색을 했습니다. 이제 그 결과를 LLM에게 전달해서 최종 답변을 만들게 해야겠죠? 이때 그냥 결과를 텍스트로 주는 게 아니라, `ToolMessage`라는 정해진 양식에 맞춰서 전달합니다.
+
+```python
+ToolMessage(
+    content=json.dumps(tool_result), # 도구 실행 결과 (예: 검색 결과 내용)
+    name=tool_call["name"],           # 어떤 도구의 결과인지 이름표
+    tool_call_id=tool_call["id"],     # **가장 중요!** 요청서의 고유 ID
+)
+```
+
+- `content`: 도구를 실행하고 나온 실제 결과물입니다.
+- `name`: 어떤 도구를 실행한 결과인지 알려주는 이름표입니다.
+- **`tool_call_id`**: 이게 정말 중요합니다. LLM이 처음에 도구를 요청할 때 각 요청마다 고유한 ID를 부여합니다. 우리는 응답을 줄 때 "이건 아까 네가 요청한 ID `123번`에 대한 결과야!"라고 알려줘야 합니다. 그래야 LLM이 어떤 요청에 대한 결과인지 헷갈리지 않고 정확하게 파악할 수 있습니다.
+
+이 `ToolMessage` 보고서를 `State`의 `messages` 리스트에 추가하면, 다음 차례의 `chatbot` 노드가 이 보고서(검색 결과)까지 포함해서 최종적으로 사용자에게 보여줄 답변을 생성하게 됩니다.
