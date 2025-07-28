@@ -115,3 +115,18 @@ graph_builder.add_edge(START, "chatbot")
 
 # 그래프 설계도롤 실행 가능한 객체로 컴파일합니다.
 graph = graph_builder.compile()
+
+while True:
+    try:
+        user_input = input("User: ")
+        if user_input.lower() in ["quit", "exit", "q"]:
+            print("Goodbye!")
+            break
+        # 사용자 메시지를 담아 그래프 실행
+        for event in graph.stream({"messages": [{"role": "user", "content": user_input}]}):
+            # 이벤트 값들을 순회하며 출력
+            for value in event.values():
+                print("Assistant:", value["messages"][-1].content)
+    except:
+        print("An error occurred while running the graph.")
+        break
