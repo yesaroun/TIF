@@ -1,0 +1,25 @@
+[project]
+name = "fastapitestcodes"
+version = "0.1.0"
+description = "FastAPI 테스트 및 학습용 프로젝트"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "requests>=2.31.0",
+]
+
+# 🚀 FastAPI 스크립트 사용법
+#
+# 개발 서버 (hot reload):
+#   uv run python scripts/serve.py
+#
+# 프로덕션 서버:
+#   uv run python scripts/start.py
+#
+# API 테스트:
+#   uv run python scripts/test_api.py
+#
+# 직접 uvicorn 실행:
+#   uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
