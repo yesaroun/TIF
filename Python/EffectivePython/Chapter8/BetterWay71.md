@@ -7,7 +7,7 @@ Producer-Consumer 큐(FIFO 큐)는 프로그래밍에서 자주 사용되는 데
 
 ## 예제 코드
 
-**1. 이메일 처리 클래스 정의:**
+**1. 이메일 처리 클래스 정의**
 
 ```python
 class Email:
@@ -18,7 +18,7 @@ class Email:
 
 ```
 
-**2. deque를 사용한 소비자 함수:**
+**2. deque를 사용한 소비자 함수**
 
 ```python
 import collections
@@ -36,7 +36,7 @@ loop(collections.deque(), my_end_func)
 
 ```
 
-**3. deque의 성능 벤치마크:**
+**3. deque의 성능 벤치마크**
 
 ```python
 def dequeue_popleft_benchmark(count):
