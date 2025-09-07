@@ -1,0 +1,11 @@
+services:
+  web:
+    image: alicek106/composetest:web
+    ports:
+      - "80:80"
+    links:
+      - mysql:db
+    command: apachectl -DFOREGROUND
+  mysql:
+    image: alicek106/composetest:mysql
+    command: mysqld
