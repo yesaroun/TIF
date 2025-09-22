@@ -1,0 +1,13 @@
+[project]
+name = "pdfqna"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "black>=25.1.0",
+    "dotenv>=0.9.9",
+    "gradio>=5.45.0",
+    "langchain-huggingface>=0.3.1",
+    "langchain-openai>=0.3.33",
+    "langchain-text-splitters>=0.3.11",
+]
