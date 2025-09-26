@@ -13,21 +13,21 @@ class ReplicaSetSpec:
     """
     ReplicaSet specification
 
-    ReplicaSet maintains a specified number of Pod replicas.
-    It identifies Pods to manage with selector and creates new Pods with template.
+    ReplicaSet은 지정된 수의 Pod 복제본을 유지한다.
+    selector로 관리할 Pod들을 식별하고 template으로 새로운 Pod들을 생성한다.
     """
-    replicas: int  # Desired number of Pod replicas
-    selector: Labels  # Label selector for selecting Pods
-    template: Dict[str, Any]  # Template for creating new Pods
-    min_ready_seconds: int = 0  # Minimum time fore a Pod to be considered ready
+    replicas: int
+    selector: Labels  # Pod 선택을 위한 라벨 셀렉터
+    template: Dict[str, Any]  # 새로운 Pod 생성을 위한 템플릿
+    min_ready_seconds: int = 0  # Pod가 준비 상태로 간주되기 위한 최소 시간
 
 
 class ReplicaSet:
     """
     Kubernetes ReplicaSet controller implementation
 
-    ReplicaSet is the next generation of Replication Controller
-    supporting richer label selector expressions
+    ReplicaSet은 Replication Controller의 차세대 버전으로
+    더 풍부한 라벨 셀렉터를 지원한다.
     """
 
     def __init__(self, name: str, namespace: str = NAMESPACE):
