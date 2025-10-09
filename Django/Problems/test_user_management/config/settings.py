@@ -49,9 +49,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Third party apps
+    "rest_framework",
     # Local apps
     "apps.user",
     "apps.test_manager",
+    "apps.weather",
 ]
 
 MIDDLEWARE = [
@@ -139,3 +142,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Custom User Model
 AUTH_USER_MODEL = 'apps.user.User'
+
+# Weather API Settings (for demo purposes)
+WEATHER_API_KEY = os.getenv('WEATHER_API_KEY', 'demo-api-key-12345')
