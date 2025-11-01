@@ -24,3 +24,5 @@
 *.db
 
 **/attachments
+
+.obsidian
