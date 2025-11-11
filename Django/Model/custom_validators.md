@@ -267,7 +267,7 @@ class Event(models.Model):
         super().save(*args, **kwargs)
 ```
 
-### clean_<fieldname>() 메서드
+### `clean_<fieldname>()` 메서드
 
 특정 필드에 대한 복잡한 검증 로직을 분리할 수 있습니다.
 
