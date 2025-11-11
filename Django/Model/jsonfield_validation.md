@@ -78,28 +78,32 @@ for product in Product.objects.all():
 
 Pydantic은 Python의 타입 힌트를 사용하여 데이터 검증을 수행하는 라이브러리입니다.
 
+> **📌 참고**: 이 문서는 Pydantic v2 기준으로 작성되었습니다.
+> ConfigDict와 model_config에 대한 자세한 설명은 [Pydantic v2 ConfigDict 가이드](../../Python/Libraries/pydantic/config-dict.md)를 참조하세요.
+
 ### 설치
 
 ```bash
 pip install pydantic
 ```
 
-### 기본 사용법
+### 기본 사용법 (Pydantic v2)
 
 ```python
 from django.db import models
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from typing import Optional
 
-# 1. Pydantic Schema 정의
+# 1. Pydantic Schema 정의 (v2 스타일)
 class ProductAttributesSchema(BaseModel):
+    # Pydantic v2에서는 ConfigDict 사용
+    model_config = ConfigDict(
+        extra='forbid'  # 정의되지 않은 필드는 거부
+    )
+
     color: str = Field(..., min_length=1, max_length=50)
     weight: float = Field(..., gt=0)  # 0보다 커야 함
     dimensions: Optional[dict] = None
-
-    class Config:
-        # 추가 필드 허용 여부
-        extra = "forbid"  # 정의되지 않은 필드는 거부
 
 # 2. Django Model에서 사용
 class Product(models.Model):
@@ -122,21 +126,26 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 ```
 
-### 고급 사용 예제
+### 고급 사용 예제 (Pydantic v2)
 
 ```python
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
 class UserSettingsSchema(BaseModel):
     """사용자 설정 스키마"""
+    # Pydantic v2: ConfigDict 사용
+    model_config = ConfigDict(extra='forbid')
+
     theme: str = Field(..., pattern="^(light|dark|auto)$")
     language: str = Field(..., min_length=2, max_length=5)
     notifications: dict = Field(default_factory=dict)
     font_size: int = Field(default=14, ge=10, le=24)
 
-    @validator('notifications')
+    # Pydantic v2: @field_validator 사용
+    @field_validator('notifications')
+    @classmethod
     def validate_notifications(cls, v):
         """알림 설정 검증"""
         allowed_keys = {'email', 'push', 'sms'}
@@ -147,9 +156,6 @@ class UserSettingsSchema(BaseModel):
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be boolean")
         return v
-
-    class Config:
-        extra = "forbid"
 
 class UserProfile(models.Model):
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE)
@@ -497,10 +503,10 @@ except ValidationError as e:
 
 ### 예제 1: 전자상거래 상품 메타데이터
 
-#### Pydantic 방식
+#### Pydantic 방식 (v2)
 
 ```python
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
 from decimal import Decimal
 
@@ -513,13 +519,18 @@ class SpecificationSchema(BaseModel):
     value: str = Field(..., min_length=1)
 
 class ProductMetadataSchema(BaseModel):
+    # Pydantic v2: ConfigDict 사용
+    model_config = ConfigDict(extra='forbid')
+
     sku: str = Field(..., min_length=1, max_length=50)
     price: PriceSchema
     specifications: List[SpecificationSchema]
     warranty_months: Optional[int] = Field(None, ge=0, le=120)
     in_stock: bool = True
 
-    @validator('specifications')
+    # Pydantic v2: @field_validator 사용
+    @field_validator('specifications')
+    @classmethod
     def validate_specifications(cls, v):
         if len(v) == 0:
             raise ValueError("At least one specification required")
@@ -530,9 +541,6 @@ class ProductMetadataSchema(BaseModel):
             raise ValueError("Specification names must be unique")
 
         return v
-
-    class Config:
-        extra = "forbid"
 
 class Product(models.Model):
     name = models.CharField(max_length=200)
@@ -650,8 +658,8 @@ class Product(JSONFieldValidationMixin, models.Model):
 ### 예제 2: 사용자 알림 설정
 
 ```python
-# Pydantic 방식
-from pydantic import BaseModel, Field
+# Pydantic 방식 (v2)
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Dict
 
 class NotificationChannelSchema(BaseModel):
@@ -659,12 +667,17 @@ class NotificationChannelSchema(BaseModel):
     frequency: str = Field(..., pattern="^(instant|daily|weekly)$")
 
 class NotificationSettingsSchema(BaseModel):
+    # Pydantic v2: ConfigDict 사용
+    model_config = ConfigDict(extra='forbid')
+
     email: NotificationChannelSchema
     push: NotificationChannelSchema
     sms: NotificationChannelSchema
     quiet_hours: Dict[str, str] = Field(default_factory=dict)
 
-    @validator('quiet_hours')
+    # Pydantic v2: @field_validator 사용
+    @field_validator('quiet_hours')
+    @classmethod
     def validate_quiet_hours(cls, v):
         if v:
             required = {'start', 'end'}
@@ -679,9 +692,6 @@ class NotificationSettingsSchema(BaseModel):
                     raise ValueError(f"{key} must be in HH:MM format")
 
         return v
-
-    class Config:
-        extra = "forbid"
 
 class UserNotificationSettings(models.Model):
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE)
@@ -837,11 +847,10 @@ class Product(models.Model):
 ```python
 class ProductMetadataSchema(BaseModel):
     """메타데이터 스키마 v2"""
+    model_config = ConfigDict(extra='forbid')
+
     version: int = Field(default=2, const=2)
     # ... 다른 필드들
-
-    class Config:
-        extra = "forbid"
 
 class Product(models.Model):
     metadata = models.JSONField(default=lambda: {"version": 2})
@@ -965,5 +974,6 @@ def migrate_existing_data():
 
 - [Django JSONField 공식 문서](https://docs.djangoproject.com/en/stable/ref/models/fields/#jsonfield)
 - [Pydantic 공식 문서](https://docs.pydantic.dev/)
+- [Pydantic v2 ConfigDict 가이드 (한글)](../../Python/Libraries/pydantic/config-dict.md)
 - [Django Model Validation](https://docs.djangoproject.com/en/stable/ref/models/instances/#validating-objects)
 - [PostgreSQL JSON Functions](https://www.postgresql.org/docs/current/functions-json.html)
