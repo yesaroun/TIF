@@ -13,6 +13,27 @@ class MyModel(BaseModel):
     )
 ```
 
+### ConfigDict 선언 패턴과 모듈화
+
+- `ConfigDict`는 `TypedDict` 기반의 헬퍼이기 때문에 IDE에서 정의 가능한 옵션을 자동 완성해주고, 잘못된 키를 쓰면 타입 단계에서 감지할 수 있습니다.
+- 프로젝트 전역에서 공통 설정을 재사용하려면 상수나 베이스 모델에 한 번만 선언한 뒤 하위 모델에서 상속하거나 복사해 쓰면 됩니다.
+- 설정 값을 부분적으로 덮어써야 할 경우 `ConfigDict`를 다시 호출해 필요한 키만 바꾸는 것이 가장 명확합니다.
+
+```python
+from pydantic import BaseModel, ConfigDict
+
+BaseConfig = ConfigDict(str_strip_whitespace=True, extra='forbid')
+
+class BaseSchema(BaseModel):
+    model_config = BaseConfig
+
+class LenientSchema(BaseSchema):
+    # 필요한 옵션만 다시 정의하면 나머지는 BaseSchema 설정이 유지됨
+    model_config = ConfigDict(**BaseSchema.model_config, extra='ignore')
+```
+
+> v2에서는 더 이상 `class Config:` 블록을 선언할 필요가 없고, `model_config` 하나에 모든 설정이 집중되므로 구조가 단순해집니다.
+
 ## 주요 ConfigDict 설정
 
 ### 1. `from_attributes` (구 orm_mode)
@@ -239,6 +260,60 @@ class Settings(BaseSettings):
 
     database_url: str
     api_key: str
+```
+
+> `BaseSettings` 전용으로는 `SettingsConfigDict` 타입을 사용할 수도 있지만, 실질적으로는 동일한 키를 공유하며 환경 변수 전용 옵션(`env_nested_delimiter` 등)이 추가되어 있습니다.
+
+## 상속과 우선순위 규칙
+
+`ConfigDict`는 MRO(메서드 해석 순서)를 따라 순차적으로 병합됩니다. 즉, `BaseModel` → 부모 클래스들 → 현재 클래스 순으로 설정이 적용되며, 동일한 키가 중복될 경우 가장 나중에 정의한 값이 우선합니다.
+
+```python
+class AuditBase(BaseModel):
+    model_config = ConfigDict(extra='forbid', validate_assignment=True)
+
+class StripBase(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+class UserSchema(AuditBase, StripBase):
+    # AuditBase → StripBase → UserSchema 순으로 병합
+    model_config = ConfigDict(extra='allow')  # extra만 덮어쓰기
+
+class FrozenUser(UserSchema):
+    model_config = ConfigDict(**UserSchema.model_config, frozen=True)
+```
+
+- 다중 상속 시 파이썬의 MRO 규칙을 그대로 따르므로, 어떤 부모를 먼저 두느냐가 중요합니다.
+- `ConfigDict`는 딕셔너리이기 때문에 `**` 전개나 `dict.update()`로 쉽게 복사/수정할 수 있습니다.
+- `BaseModel` 자체도 내부 기본 설정을 가지고 있으므로, 명시하지 않은 키는 모두 기본값을 사용합니다.
+
+## 자주 사용하는 추가 옵션들
+
+- `frozen=True`: 모델을 불변 객체처럼 다루며, 생성 후 필드 수정 시 `ValidationError`가 아닌 `TypeError`가 발생합니다. 캐시 키나 해시 가능한 객체가 필요할 때 유용합니다.
+- `alias_generator=callable`: 필드 이름을 자동으로 변환하는 함수. 예를 들어 `snake_case` ↔ `camelCase` 변환에 활용합니다.
+- `protected_namespaces=('model_',)` : `model_`로 시작하는 속성은 Pydantic 내부 예약어라서 기본적으로 보호됩니다. 커스텀 prefix를 추가해 충돌을 피할 수 있습니다.
+- `json_schema_extra=dict`: OpenAPI/JSON Schema 문서화 시 추가 메타데이터를 부여합니다.
+- `ignored_types=(SomeType,)`: 검증에서 완전히 제외하고 싶은 타입을 등록할 수 있습니다. (예: 로깅 컨텍스트 객체 등)
+- `loc_by_alias=True`: 오류 메시지나 `model_dump()` 결과에서 필드 명 대신 alias를 사용합니다. API 응답 명세에 맞춘 에러 메시지가 필요할 때 쓰입니다.
+
+```python
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+
+def to_camel(string: str) -> str:
+    head, *tail = string.split('_')
+    return head + ''.join(word.title() for word in tail)
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        loc_by_alias=True,
+        frozen=True,
+    )
+
+    created_at: datetime
+    user_name: str
 ```
 
 ## from_attributes 사용/미사용 비교
