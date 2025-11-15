@@ -205,7 +205,95 @@ XADD orders MAXLEN ~ 1000 * user user1 product A
 - 워커가 죽었거나, 예외로 처리가 중단된 메시지들이 여기에 남음
     
 - `XPENDING`, `XCLAIM`, `XAUTOCLAIM`으로 재할당·재처리 가능
-    
+
+
+### 5.1.1 Pending 자동 생성 및 제거 메커니즘
+
+**중요:** Pending은 미리 설정하는 것이 아니라 **자동으로 생성/제거**됩니다.
+
+#### 자동 생성 (읽기 시)
+
+```bash
+# XREADGROUP으로 메시지를 읽는 순간 → 자동으로 Pending에 추가
+XREADGROUP GROUP order-processors worker-1 COUNT 10 STREAMS orders >
+```
+
+- 메시지를 읽으면 Redis가 자동으로 해당 메시지를 **Pending Entries List(PEL)**에 추가
+- Pending 상태 = "워커에게 할당됨, 아직 처리 결과를 모름"
+- 별도의 설정이나 명령어 필요 없음
+
+#### 자동 제거 (ACK 시)
+
+```bash
+# XACK로 처리 완료를 명시하면 → Pending에서 자동 제거
+XACK orders order-processors 1699876543210-0
+```
+
+- 워커가 `XACK`를 호출하면 Redis가 자동으로 PEL에서 제거
+- 스트림의 실제 데이터는 여전히 존재 (별도로 `XDEL`로 삭제 필요)
+
+#### 상태 전환 흐름
+
+```text
+[새 메시지]
+    │
+    ▼
+┌─────────────────┐
+│ Stream에 존재    │  ← XADD로 추가됨
+│ (Pending 아님)   │
+└─────────────────┘
+    │
+    │ XREADGROUP 실행
+    ▼
+┌─────────────────┐
+│ Pending 상태!    │  ← 자동으로 PEL에 추가됨
+│ Consumer: worker-1
+│ Status: 처리 중   │
+└─────────────────┘
+    │
+    ├─ XACK 성공 ──→ [PEL에서 제거] ✅
+    │
+    └─ 워커 죽음/실패 ──→ [PEL에 계속 남음] ⚠️
+                         └→ XAUTOCLAIM으로 재처리
+```
+
+#### Python 예시
+
+```python
+import redis
+r = redis.Redis(decode_responses=True)
+
+# 1. XREADGROUP으로 읽기 → Pending 자동 추가
+messages = r.xreadgroup(
+    groupname='order-processors',
+    consumername='worker-1',
+    streams={'orders': '>'},
+    count=10
+)
+# 이 순간 메시지가 자동으로 Pending 상태로 변경됨!
+
+# 2. 비즈니스 로직 실행
+for stream, entries in messages:
+    for entry_id, data in entries:
+        try:
+            process_order(data)  # 재고 감소, 결제 등
+
+            # 3. 성공 시 XACK → Pending 자동 제거
+            r.xack('orders', 'order-processors', entry_id)
+
+        except Exception as e:
+            # 실패 시 ACK 안 함 → Pending에 계속 남음
+            # 나중에 XAUTOCLAIM이 재처리
+            print(f"실패: {e}")
+```
+
+#### 주요 특징
+
+- **자동 추적**: Redis가 알아서 Pending 상태 관리
+- **타임아웃 없음**: ACK 안 하면 영원히 Pending (주기적 모니터링 필수)
+- **MAXLEN과 독립적**: MAXLEN으로 스트림 데이터 삭제돼도 Pending 참조는 남음
+- **재처리 가능**: 워커 장애 시 `XAUTOCLAIM`으로 다른 워커에게 재할당
+
 
 ### 5.2 At-least-once Delivery
 
@@ -376,6 +464,21 @@ XACK orders order-processors 1699876543210-0
 ---
 
 ### 6.5 Pending / 재처리 – XPENDING, XCLAIM, XAUTOCLAIM
+
+#### Pending 생명 주기 한눈에 보기
+
+Pending은 자동으로 생성/관리되며, 아래 단계를 거칩니다:
+
+|단계|상태|명령어|결과|
+|---|---|---|---|
+|1|스트림에만 존재|`XADD`|메시지 추가, Pending 아님|
+|2|Pending 추가|`XREADGROUP`|**자동으로 PEL에 추가**|
+|3|처리 중|비즈니스 로직 실행|Pending 유지|
+|4|처리 완료|`XACK`|**자동으로 PEL에서 제거**|
+|5|모니터링|`XPENDING`|Pending 상태 확인|
+|6|재처리 필요|`XCLAIM/XAUTOCLAIM`|다른 워커로 재할당|
+
+**핵심:** `XREADGROUP` → Pending 추가(자동), `XACK` → Pending 제거(자동)
 
 ```bash
 # 그룹 전체 Pending 요약
