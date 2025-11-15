@@ -486,6 +486,13 @@ XPENDING orders order-processors
 
 # 특정 consumer의 Pending 상세
 XPENDING orders order-processors - + 10 worker-1
+#        ^^^^^^ ^^^^^^^^^^^^^^^^ ^ ^ ^^ ^^^^^^^^
+#        │      │                │ │ │  └─ Consumer 이름 (선택)
+#        │      │                │ │ └─ 최대 개수
+#        │      │                │ └─ 끝 ID (+ = 마지막까지)
+#        │      │                └─ 시작 ID (- = 처음부터)
+#        │      └─ Consumer Group 이름
+#        └─ Stream 이름
 
 # 오래된 메시지를 다른 consumer로 소유권 변경
 XCLAIM orders order-processors worker-2 600000 1699876543210-0
@@ -510,6 +517,52 @@ XTRIM orders MAXLEN ~ 100000
 
 # 특정 메시지 수동 삭제
 XDEL orders 1699876543210-0
+```
+
+#### 특수 ID 기호: `-`와 `+`
+
+범위 조회 시 사용하는 특수 기호:
+
+| 기호 | 의미 | 설명 |
+|------|------|------|
+| **`-`** | 가장 작은 ID | 스트림의 처음 (oldest) |
+| **`+`** | 가장 큰 ID | 스트림의 끝 (newest) |
+
+**정순 vs 역순:**
+
+```bash
+# 정순 (XRANGE): 처음 → 끝
+XRANGE orders - +
+#             ^ ^
+#             처음→끝 (오래된 것부터)
+
+# 역순 (XREVRANGE): 끝 → 처음
+XREVRANGE orders + -
+#                ^ ^
+#                끝→처음 (최신 것부터)
+```
+
+**실전 예시:**
+
+```bash
+# 처음부터 10개
+XRANGE orders - + COUNT 10
+
+# 최신 10개 (역순)
+XREVRANGE orders + - COUNT 10
+
+# 특정 ID부터 끝까지
+XRANGE orders 1699876543210-0 +
+
+# 특정 시간 범위만
+XRANGE orders 1699876543000-0 1699876544000-0
+```
+
+**XPENDING에서도 동일:**
+
+```bash
+# worker-1의 모든 Pending 조회 (처음부터 끝까지)
+XPENDING orders order-processors - + 100 worker-1
 ```
 
 ---
